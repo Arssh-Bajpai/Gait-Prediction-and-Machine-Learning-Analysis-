@@ -1,6 +1,7 @@
 from sklearn import datasets
 
 diabetes = datasets.load_diabetes()
+print(type(diabetes), diabetes)
 
 X = diabetes.data
 y = diabetes.target
