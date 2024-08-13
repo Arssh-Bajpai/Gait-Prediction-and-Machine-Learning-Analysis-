@@ -146,26 +146,37 @@ grid_search.fit(X_train, Y_train)
 # Print the best parameters and the best score from the grid search
 print("Best Parameters:", grid_search.best_params_)
 print("Best Score:", grid_search.best_score_)
+# Feature Importance Plot
+plt.figure(figsize=(12, 8))
+plt.barh(feature_names, importance, color='skyblue')
+plt.xlabel('Importance')
+plt.ylabel('Feature')
+plt.title('Feature Importance')
+plt.grid(True, linestyle='--', alpha=0.6)
+plt.show()
 
-# Visualization of the residuals and anomalies
+# Visualization of the Residuals and Anomalies
 plt.figure(figsize=(10, 6))
-plt.scatter(range(len(residuals)), residuals, color='blue', label='Residuals')
-plt.scatter(np.where(anomalies)[0], residuals[anomalies], color='red', label='Anomalies')
+plt.scatter(range(len(residuals)), residuals, color='blue', label='Residuals', alpha=0.7)
+plt.scatter(np.where(anomalies)[0], residuals[anomalies], color='red', label='Anomalies', marker='x')
 plt.xlabel('Index')
 plt.ylabel('Residual')
 plt.title('Residuals and Anomalies')
 plt.legend()
+plt.grid(True, linestyle='--', alpha=0.6)
 plt.show()
 
-# Visualization of predicted vs. actual values
+# Visualization of Predicted vs. Actual Values
 plt.figure(figsize=(10, 6))
-plt.plot(Y_test, label='Actual', color='blue')
-plt.plot(y_pred, label='Predicted', color='red')
+plt.plot(Y_test, label='Actual', color='blue', linestyle='-', marker='o', markersize=5)
+plt.plot(y_pred, label='Predicted', color='red', linestyle='-', marker='x', markersize=5)
 plt.xlabel('Index')
 plt.ylabel('Value')
 plt.title('Predicted vs. Actual Values')
 plt.legend()
+plt.grid(True, linestyle='--', alpha=0.6)
 plt.show()
+
 
 
 # Diagnostic Report
