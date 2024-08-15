@@ -1,5 +1,5 @@
 import xgboost as xgb
-from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
@@ -7,7 +7,29 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import joblib
+import os
+import tkinter as tk
+from tkinter import ttk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
+# Neural Network Definition
+class GaitAnomalyNet(nn.Module):
+    def __init__(self, input_size):
+        super(GaitAnomalyNet, self).__init__()
+        self.fc1 = nn.Linear(input_size, 64)
+        self.fc2 = nn.Linear(64, 32)
+        self.fc3 = nn.Linear(32, 16)
+        self.fc4 = nn.Linear(16, 1)
+
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
+        x = torch.relu(self.fc3(x))
+        x = self.fc4(x)
+        return x
 
 # Read the CSV file for the patient
 def readCSVFile(fileName):
@@ -27,11 +49,6 @@ def readCSVFile(fileName):
         print(f"An unexpected error occurred: {e}")
     stride_step_array = np.array(stride_step)
     return stride_step_array
-
-
-# Initialize the patient from the CSV file
-patient = readCSVFile('/Users/arsshbajpai/PycharmProjects/Final Project AI/Gait Data/pd1-si.csv')
-
 
 # Feature Engineering: Creating additional features
 def feature_engineering(data):
@@ -63,122 +80,6 @@ def feature_engineering(data):
 
     return df
 
-
-# Apply feature engineering
-patient_df = feature_engineering(patient)
-X = patient_df.drop(columns=['target']).values
-Y = patient_df['target'].values
-
-# Standardize features
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
-
-# Split the arrays into testing and training with a 20-80 split
-X_train, X_test, Y_train, Y_test = train_test_split(X_scaled, Y, test_size=0.2, random_state=42)
-
-# Initialize the regressor function using squared error and root mean square error
-trainer = xgb.XGBRegressor(objective='reg:squarederror', eval_metric='rmse')
-
-# Use cross-validation to evaluate the model
-cv_scores = cross_val_score(trainer, X_train, Y_train, cv=5, scoring='neg_mean_squared_error')
-print(f"Cross-Validation MSE Scores: {-cv_scores}")
-print(f"Mean Cross-Validation MSE: {-cv_scores.mean()}")
-
-# Train the model using the training data
-trainer.fit(X_train, Y_train)
-
-# Make predictions off of the testing data
-y_pred = trainer.predict(X_test)
-
-# Calculate the residuals: the difference between the actual and predictions for the data
-residual = Y_test - y_pred
-
-# Reshape the residuals into a 2D array
-residuals = residual.reshape(-1, 1)
-
-# Initialize the isolation forest for anomaly detection
-anomaly_detector = IsolationForest(contamination=0.2, random_state=42)
-
-# Fit the residuals into the isolation forest
-anomaly_detector.fit(residuals)
-
-# Predict anomalies based on the residuals
-anomalies = anomaly_detector.predict(residuals)
-
-# Post-process the results to map -1 to True (anomaly) and 1 to False (normal)
-anomalies = anomalies == -1
-
-# Print the anomalies
-print("Anomalies detected:", anomalies)
-
-# Additional Evaluation Metrics
-mse = mean_squared_error(Y_test, y_pred)
-mae = mean_absolute_error(Y_test, y_pred)
-r2 = r2_score(Y_test, y_pred)
-print(f"Mean Squared Error: {mse}")
-print(f"Mean Absolute Error: {mae}")
-print(f"R-squared: {r2}")
-
-# Feature Importance
-importance = trainer.feature_importances_
-feature_names = patient_df.drop(columns=['target']).columns.astype(
-    str)  # Ensure feature names are strings
-
-# Plot feature importance
-plt.figure(figsize=(12, 8))
-plt.barh(feature_names, importance)
-plt.xlabel('Importance')
-plt.ylabel('Feature')
-plt.title('Feature Importance')
-plt.show()
-
-# Optional: Tune hyperparameters using GridSearchCV (for demonstration purposes, not comprehensive)
-param_grid = {
-    'n_estimators': [50, 100, 150],
-    'learning_rate': [0.01, 0.1, 0.2],
-    'max_depth': [3, 4, 5]
-}
-
-grid_search = GridSearchCV(estimator=xgb.XGBRegressor(objective='reg:squarederror'),
-                           param_grid=param_grid, cv=3, scoring='neg_mean_squared_error')
-grid_search.fit(X_train, Y_train)
-
-# Print the best parameters and the best score from the grid search
-print("Best Parameters:", grid_search.best_params_)
-print("Best Score:", grid_search.best_score_)
-# Feature Importance Plot
-plt.figure(figsize=(12, 8))
-plt.barh(feature_names, importance, color='skyblue')
-plt.xlabel('Importance')
-plt.ylabel('Feature')
-plt.title('Feature Importance')
-plt.grid(True, linestyle='--', alpha=0.6)
-plt.show()
-
-# Visualization of the Residuals and Anomalies
-plt.figure(figsize=(10, 6))
-plt.scatter(range(len(residuals)), residuals, color='blue', label='Residuals', alpha=0.7)
-plt.scatter(np.where(anomalies)[0], residuals[anomalies], color='red', label='Anomalies', marker='x')
-plt.xlabel('Index')
-plt.ylabel('Residual')
-plt.title('Residuals and Anomalies')
-plt.legend()
-plt.grid(True, linestyle='--', alpha=0.6)
-plt.show()
-
-# Visualization of Predicted vs. Actual Values
-plt.figure(figsize=(10, 6))
-plt.plot(Y_test, label='Actual', color='blue', linestyle='-', marker='o', markersize=5)
-plt.plot(y_pred, label='Predicted', color='red', linestyle='-', marker='x', markersize=5)
-plt.xlabel('Index')
-plt.ylabel('Value')
-plt.title('Predicted vs. Actual Values')
-plt.legend()
-plt.grid(True, linestyle='--', alpha=0.6)
-plt.show()
-
-
-
 # Diagnostic Report
 def diagnostic_report(y_test, y_pred, anomalies):
     report = pd.DataFrame({
@@ -194,19 +95,141 @@ def diagnostic_report(y_test, y_pred, anomalies):
                                        'Mild Impairment', 'Normal'))
     return report
 
+# Function to run the model and generate the graph and report
+def run_model(file_name):
+    try:
+        patient = readCSVFile(file_name)
+        if patient.size == 0:
+            print("Error: The data array is empty.")
+            return
 
-diagnosis_report = diagnostic_report(Y_test, y_pred, anomalies)
-print(diagnosis_report)
+        patient_df = feature_engineering(patient)
+        if patient_df.shape[0] == 0 or patient_df.shape[1] == 0:
+            print("Error: The DataFrame is empty after feature engineering.")
+            return
 
-# Save the model and scaler for future use
-joblib.dump(trainer, 'xgb_model.pkl')
-joblib.dump(scaler, 'scaler.pkl')
+        X = patient_df.drop(columns=['target']).values
+        Y = patient_df['target'].values
 
-# Save preprocessed data
-preprocessed_data = {
-    'X_train': X_train,
-    'X_test': X_test,
-    'Y_train': Y_train,
-    'Y_test': Y_test
-}
-joblib.dump(preprocessed_data, 'preprocessed_data.pkl')
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+
+        X_train, X_test, Y_train, Y_test = train_test_split(X_scaled, Y, test_size=0.2, random_state=42)
+
+        # XGBoost Model
+        trainer = xgb.XGBRegressor(objective='reg:squarederror', eval_metric='rmse')
+        cv_scores = cross_val_score(trainer, X_train, Y_train, cv=5, scoring='neg_mean_squared_error')
+        print(f"Cross-Validation MSE Scores: {-cv_scores}")
+        print(f"Mean Cross-Validation MSE: {-cv_scores.mean()}")
+        trainer.fit(X_train, Y_train)
+
+        y_pred_train_xgb = trainer.predict(X_train)
+        y_pred_test_xgb = trainer.predict(X_test)
+
+        residual_train_xgb = Y_train - y_pred_train_xgb
+        residual_test_xgb = Y_test - y_pred_test_xgb
+
+        # Neural Network for Time-Sensitive Anomaly Detection
+        input_size = X_train.shape[1]
+        net = GaitAnomalyNet(input_size)
+        criterion = nn.MSELoss()
+        optimizer = optim.Adam(net.parameters(), lr=0.001)
+
+        # Convert data to PyTorch tensors
+        X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
+        Y_train_tensor = torch.tensor(Y_train, dtype=torch.float32).view(-1, 1)
+        X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
+        Y_test_tensor = torch.tensor(Y_test, dtype=torch.float32).view(-1, 1)
+
+        # Train the Neural Network
+        for epoch in range(500):
+            optimizer.zero_grad()
+            outputs = net(X_train_tensor)
+            loss = criterion(outputs, Y_train_tensor)
+            loss.backward()
+            optimizer.step()
+
+        y_pred_train_nn = net(X_train_tensor).detach().numpy().flatten()
+        y_pred_test_nn = net(X_test_tensor).detach().numpy().flatten()
+
+        residual_train_nn = Y_train - y_pred_train_nn
+        residual_test_nn = Y_test - y_pred_test_nn
+
+        # Combine XGBoost and Neural Network residuals
+        combined_residuals_train = residual_train_xgb + residual_train_nn
+        combined_residuals_test = residual_test_xgb + residual_test_nn
+
+        anomaly_detector = IsolationForest(contamination=0.2, random_state=42)
+        anomaly_detector.fit(combined_residuals_train.reshape(-1, 1))
+
+        anomalies_train = anomaly_detector.predict(combined_residuals_train.reshape(-1, 1)) == -1
+        anomalies_test = anomaly_detector.predict(combined_residuals_test.reshape(-1, 1)) == -1
+
+        diagnosis_report_train = diagnostic_report(Y_train, y_pred_train_xgb, anomalies_train)
+        diagnosis_report_test = diagnostic_report(Y_test, y_pred_test_xgb, anomalies_test)
+
+        # Display Diagnostic Report
+        text_report.delete(1.0, tk.END)
+        text_report.insert(tk.END, "\nTraining Data Diagnostic Report:\n")
+        text_report.insert(tk.END, diagnosis_report_train.to_string())
+        text_report.insert(tk.END, "\n\nTesting Data Diagnostic Report:\n")
+        text_report.insert(tk.END, diagnosis_report_test.to_string())
+
+        # Plotting the graph for testing data
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.scatter(range(len(combined_residuals_test)), combined_residuals_test, color='blue', label='Residuals (Test)', alpha=0.7)
+        ax.scatter(np.where(anomalies_test)[0], combined_residuals_test[anomalies_test], color='red', label='Anomalies (Test)',
+                   marker='x')
+        ax.set_xlabel('Index')
+        ax.set_ylabel('Residual')
+        ax.set_title(f'Residuals and Anomalies (Testing Data) - {file_name}')
+        ax.legend()
+        ax.grid(True, linestyle='--', alpha=0.6)
+
+        # Display the plot in the GUI
+        for widget in frame_graph.winfo_children():
+            widget.destroy()
+
+        canvas = FigureCanvasTkAgg(fig, master=frame_graph)
+        canvas.draw()
+        canvas.get_tk_widget().pack()
+
+    except Exception as e:
+        print(f"An error occurred in run_model: {e}")
+
+# Create the GUI
+root = tk.Tk()
+root.title("Gait Anomaly Detection")
+
+# Frame for dropdown and run button
+frame_top = ttk.Frame(root)
+frame_top.pack(pady=10)
+
+# Dropdown for selecting the file
+label = ttk.Label(frame_top, text="Select Patient File:")
+label.pack(side=tk.LEFT)
+
+gait_data_dir = '/Users/arsshbajpai/PycharmProjects/Final Project AI/Gait Data'
+files = [f for f in os.listdir(gait_data_dir) if f.endswith('.csv')]
+
+selected_file = tk.StringVar()
+dropdown = ttk.Combobox(frame_top, textvariable=selected_file, values=files)
+dropdown.pack(side=tk.LEFT, padx=10)
+dropdown.current(0)
+
+# Run button
+button_run = ttk.Button(frame_top, text="Run Model", command=lambda: run_model(os.path.join(gait_data_dir, selected_file.get())))
+button_run.pack(side=tk.LEFT)
+
+# Frame for graph
+frame_graph = ttk.Frame(root)
+frame_graph.pack(pady=10)
+
+# Frame for diagnostic report
+frame_report = ttk.Frame(root)
+frame_report.pack(pady=10)
+
+text_report = tk.Text(frame_report, height=15, width=80)
+text_report.pack()
+
+root.mainloop()
